@@ -1,7 +1,5 @@
 package io.roach.jdbc.sandbox;
 
-import java.sql.Connection;
-
 import javax.sql.DataSource;
 
 import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
@@ -13,7 +11,6 @@ import org.springframework.data.jdbc.repository.config.AbstractJdbcConfiguration
 import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
@@ -29,7 +26,7 @@ public class JdbcConfiguration extends AbstractJdbcConfiguration {
     public static final String SQL_TRACE_LOGGER = "io.roach.SQL_TRACE";
 
     @Bean
-    @Primary
+//    @Primary
     @ConfigurationProperties("spring.datasource")
     public DataSourceProperties dataSourceProperties() {
         return new DataSourceProperties();
@@ -38,11 +35,17 @@ public class JdbcConfiguration extends AbstractJdbcConfiguration {
     @Bean
     @Primary
     public DataSource primaryDataSource() {
-        LazyConnectionDataSourceProxy proxy = new LazyConnectionDataSourceProxy();
-        proxy.setTargetDataSource(loggingProxy(targetDataSource()));
-        proxy.setDefaultAutoCommit(false);
-        proxy.setDefaultTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
-        return proxy;
+        return loggingProxy(targetDataSource());
+    }
+
+    private DataSource loggingProxy(DataSource dataSource) {
+        return ProxyDataSourceBuilder
+                .create(dataSource)
+                .name("SQL-Trace")
+                .asJson()
+                .multiline()
+                .logQueryBySlf4j(SLF4JLogLevel.TRACE, SQL_TRACE_LOGGER)
+                .build();
     }
 
     @Bean
@@ -55,17 +58,6 @@ public class JdbcConfiguration extends AbstractJdbcConfiguration {
         ds.addDataSourceProperty("reWriteBatchedInserts", true);
         ds.addDataSourceProperty("ApplicationName", "roach-jdbc");
         return ds;
-    }
-
-    private DataSource loggingProxy(DataSource dataSource) {
-        return ProxyDataSourceBuilder
-                .create(dataSource)
-                .name("SQL-Trace")
-                .asJson()
-                .countQuery()
-                .logQueryBySlf4j(SLF4JLogLevel.TRACE, SQL_TRACE_LOGGER)
-                .multiline()
-                .build();
     }
 
     @Bean
